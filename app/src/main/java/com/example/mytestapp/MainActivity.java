@@ -5,6 +5,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
 import android.widget.TextView;
 
+import com.example.mytestapp.disklrucache.DiskLruCacheHelper;
+
 public class MainActivity extends AppCompatActivity {
 
     // Used to load the 'native-lib' library on application startup.
@@ -20,6 +22,10 @@ public class MainActivity extends AppCompatActivity {
         // Example of a call to a native method
         TextView tv = findViewById(R.id.sample_text);
         tv.setText(stringFromJNI());
+
+        DiskLruCacheHelper helper = new DiskLruCacheHelper(this.getApplicationContext());
+        helper.open();
+
     }
 
     /**
