@@ -30,20 +30,6 @@ import sun.misc.BASE64Encoder;
 
 public class CommonUtils {
 
-    public static File getDiskCacheDir(Context context, String uniqueName) {
-        if (null == context) {
-            return null;
-        }
-        String cachePath;
-        if (Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())
-                || !Environment.isExternalStorageRemovable()) {
-            cachePath = context.getExternalCacheDir().getPath();
-        } else {
-            cachePath = context.getCacheDir().getPath();
-        }
-        return new File(cachePath + File.separator + uniqueName);
-    }
-
     public static int getAppVersion(Context context) {
         int version = 0;
         if (null != context)
@@ -56,71 +42,6 @@ public class CommonUtils {
             }
         return version;
     }
-
-    public static String getAssetsFileContent(Context context, String fileName) {
-
-        //Return an AssetManager instance for your application's package
-        InputStream is = null;
-        try {
-            is = context.getAssets().open(fileName);
-
-            int size = is.available();
-            // Read the entire asset into a local byte buffer.
-            byte[] buffer = new byte[size];
-            is.read(buffer);
-
-            // Convert the buffer into a string.
-            String text = new String(buffer, StandardCharsets.UTF_8);
-            // Finally stick the string into the text view.
-
-            return text;
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            if (is != null) {
-                try {
-                    is.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-        return "";
-    }
-
-    public static String getBackupFileUrl() {
-        SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMdd_HHmmss");
-        Date curDate = new Date(System.currentTimeMillis());
-        String curDateStr = formatter.format(curDate);
-        String current_bak = null;
-        if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
-            String path = Environment.getExternalStorageDirectory().getPath() + "/sushi/backup/";
-            File file = new File(path);
-            if (!file.exists()) {
-                file.mkdirs();
-            }
-            current_bak = path + "backup_" + curDateStr + ".bak";
-        }
-        return current_bak;
-    }
-
-    public static void createNewFile(String filePath) throws IOException {
-        File file = new File(filePath);
-        if (file.exists()) {
-            file.delete();
-        }
-        file.createNewFile();
-    }
-
-    public static boolean isMountedSDCard() {
-        if (Environment.MEDIA_MOUNTED.equals(Environment
-                .getExternalStorageState())) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
 
     /**
      * The timestamp is converted into a date
