@@ -44,6 +44,9 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.2.0'
     implementation 'com.google.android.material:material:1.2.1'
     implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
+
+    implementation files('libs/BASE64.jar')
+
     //导入zxing依赖
     implementation 'com.journeyapps:zxing-android-embedded:3.6.0'
     //导入Glide依赖
