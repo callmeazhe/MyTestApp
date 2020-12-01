@@ -2,11 +2,14 @@ package com.example.mytestapp.utils;
 
 import android.content.Context;
 import android.os.Environment;
+import android.text.TextUtils;
 
 import com.example.mytestapp.BaseApplication;
 
 import java.io.File;
 import java.io.FileFilter;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -17,8 +20,8 @@ import java.util.List;
 
 public class FileUtil {
 
-    public static String getInnerFilePath() {
-        String filePath = null;
+    public static String getInnerDirectoryPath() {
+        String filePath;
         if (Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())
                 || !Environment.isExternalStorageRemovable()) {
             filePath = BaseApplication.mContext.getExternalFilesDir("").getPath();
@@ -52,13 +55,12 @@ public class FileUtil {
             int size = is.available();
             // Read the entire asset into a local byte buffer.
             byte[] buffer = new byte[size];
-            is.read(buffer);
-
-            // Convert the buffer into a string.
-            String text = new String(buffer, StandardCharsets.UTF_8);
-            // Finally stick the string into the text view.
-
-            return text;
+            int result = is.read(buffer);
+            if (result != -1) {
+                // Convert the buffer into a string.
+                // Finally stick the string into the text view.
+                return new String(buffer, StandardCharsets.UTF_8);
+            }
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
@@ -98,16 +100,13 @@ public class FileUtil {
     }
 
     public static boolean isMountedSDCard() {
-        if (Environment.MEDIA_MOUNTED.equals(Environment
-                .getExternalStorageState())) {
-            return true;
-        } else {
-            return false;
-        }
+        return Environment.MEDIA_MOUNTED.equals(Environment
+                .getExternalStorageState());
+
     }
 
     public static List<String> getCSVFileNameList() {
-        String path = getInnerFilePath() + "/sushi/backup/";
+        String path = getInnerDirectoryPath() + "/sushi/backup/";
         File file = new File(path);
         List<String> result = new ArrayList<String>();
         if (!file.isDirectory()) {
@@ -117,18 +116,75 @@ public class FileUtil {
             // Used to filter file types.
             File[] directoryList = file.listFiles(new FileFilter() {
                 public boolean accept(File file) {
-                    if (file.isFile() && file.getName().toUpperCase().endsWith(".BAK")) {
-                        return true;
-                    } else {
-                        return false;
-                    }
+                    return file.isFile() && file.getName().toUpperCase().endsWith(".BAK");
                 }
             });
             if (directoryList != null)
-                for (int i = 0; i < directoryList.length; i++) {
-                    result.add(directoryList[i].getAbsolutePath());
+                for (File _file : directoryList) {
+                    result.add(_file.getAbsolutePath());
                 }
         }
         return result;
+    }
+
+    private void beganMigrateOldFiles(String newDirectoryName, File oldFile) {
+        if (null == oldFile || !oldFile.exists())
+            return;
+        if (TextUtils.isEmpty(newDirectoryName))
+            newDirectoryName = getInnerDirectoryPath();
+
+        FileInputStream fileInputStream = null;
+        FileOutputStream fileOutputStream = null;
+        File newFile;
+        byte[] buffer = new byte[1024 * 4];
+
+        if (oldFile.isDirectory()) {
+            if (oldFile.getName().endsWith("sushi")) {
+                newDirectoryName = newDirectoryName + File.separator;
+            } else {
+                newDirectoryName = newDirectoryName + File.separator + oldFile.getName();
+            }
+            newFile = new File(newDirectoryName);
+            newFile.mkdir();
+            if (newFile.exists())
+                return;
+            File[] oldFiles = oldFile.listFiles();
+            if (null == oldFiles || oldFiles.length == 0)
+                return;
+            for (File file : oldFiles) {
+                if (null == file || !file.exists() || file.length() == 0 || !file.canRead())
+                    continue;
+                beganMigrateOldFiles(newDirectoryName, file);
+            }
+        } else {
+            try {
+                fileInputStream = new FileInputStream(oldFile);
+
+                String newFileName = newDirectoryName + File.separator + oldFile.getName();
+                newFile = new File(newFileName);
+                if (newFile.exists())
+                    return;
+                fileOutputStream = new FileOutputStream(newFile);
+
+                int len;
+                while ((len = fileInputStream.read(buffer)) != -1) {
+                    fileOutputStream.write(buffer, 0, len);
+                }
+                fileOutputStream.flush();
+            } catch (Exception e) {
+                if (e.toString().contains("ENOSPC")) {
+                    //TODO
+                }
+            } finally {
+                try {
+                    if (null != fileOutputStream)
+                        fileOutputStream.close();
+                    if (null != fileInputStream)
+                        fileInputStream.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 }
