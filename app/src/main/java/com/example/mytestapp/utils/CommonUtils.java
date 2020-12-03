@@ -8,7 +8,6 @@ import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.os.Build;
 import android.os.Environment;
-import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.view.View;
 import android.view.Window;
@@ -16,15 +15,23 @@ import android.view.WindowManager;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.example.mytestapp.nfc.utils.LogUtil;
+
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.io.UnsupportedEncodingException;
+import java.io.Writer;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 
 import sun.misc.BASE64Encoder;
 
@@ -220,6 +227,77 @@ public class CommonUtils {
 
         }
 
+    }
+
+    public static Map<String, String> collectDeviceInfo(Context context) {
+        Map<String, String> info = new HashMap<String, String>();
+
+        try {
+            PackageManager packageManager = context.getPackageManager();
+            PackageInfo packageInfo = packageManager.getPackageInfo(context.getPackageName(),
+                    PackageManager.GET_ACTIVITIES);
+            if (null != packageInfo) {
+                String versionName = packageInfo.versionName == null ? "null"
+                        : packageInfo.versionName;
+                String versionCode = packageInfo.versionCode + "";
+                info.put("VersionName", versionName);
+                info.put("VersionCode", versionCode);
+            }
+        } catch (PackageManager.NameNotFoundException e) {
+            LogUtil.outLog("an error occured when collect package info" + e.toString());
+        }
+        Field[] fields = Build.class.getDeclaredFields();
+        for (Field field : fields) {
+            try {
+                field.setAccessible(true);
+                info.put(field.getName(), field.get(null).toString());
+            } catch (Exception e) {
+                LogUtil.outLog("an error occured when collect crash info" + e.toString());
+            }
+        }
+        return info;
+    }
+
+    public static String saveCrashInfoToFile(Throwable throwable,HashMap<String, String> info) {
+
+        DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
+
+        StringBuffer stringBuffer = new StringBuffer();
+        for (Map.Entry<String, String> entry : info.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+            stringBuffer.append(key + "=" + value + "\n");
+        }
+        Writer writer = new StringWriter();
+        PrintWriter printWriter = new PrintWriter(writer);
+        throwable.printStackTrace(printWriter);
+        Throwable cause = throwable.getCause();
+        if (null != cause) {
+            cause.printStackTrace(printWriter);
+        }
+        printWriter.close();
+        String result = writer.toString();
+        stringBuffer.append(result);
+        try {
+            String time = formatter.format(new Date());
+            String fileName = "error-" + time + "-" + System.currentTimeMillis() + ".txt";
+            if (Environment.getExternalStorageState().equals(
+                    Environment.MEDIA_MOUNTED)) {
+                String path = MyFileUtil.getInnerDirectoryPath();
+                File dir = new File(path);
+                if (!dir.exists()) {
+                    dir.mkdirs();
+                }
+                FileOutputStream fos = new FileOutputStream(dir);
+                fos.write(stringBuffer.toString().getBytes());
+                fos.flush();
+                fos.close();
+            }
+            return fileName;
+        } catch (Exception e) {
+            LogUtil.outLog("an error occured while writing file..." + e.toString());
+        }
+        return null;
     }
 
 }

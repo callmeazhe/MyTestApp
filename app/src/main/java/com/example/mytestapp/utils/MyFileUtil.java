@@ -18,7 +18,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-public class FileUtil {
+public class MyFileUtil {
 
     public static String getInnerDirectoryPath() {
         String filePath;
@@ -128,61 +128,61 @@ public class FileUtil {
     }
 
     private void beganMigrateOldFiles(String newDirectoryName, File oldFile) {
-        if (null == oldFile || !oldFile.exists())
-            return;
-        if (TextUtils.isEmpty(newDirectoryName))
-            newDirectoryName = getInnerDirectoryPath();
+        if (null != oldFile && oldFile.exists()) {
+            if (TextUtils.isEmpty(newDirectoryName))
+                newDirectoryName = getInnerDirectoryPath();
 
-        FileInputStream fileInputStream = null;
-        FileOutputStream fileOutputStream = null;
-        File newFile;
-        byte[] buffer = new byte[1024 * 4];
+            FileInputStream fileInputStream = null;
+            FileOutputStream fileOutputStream = null;
+            File newFile = null;
+            byte[] buffer = new byte[1024 * 4];
 
-        if (oldFile.isDirectory()) {
-            if (oldFile.getName().endsWith("sushi")) {
-                newDirectoryName = newDirectoryName + File.separator;
+            if (oldFile.isDirectory()) {
+                if (oldFile.getName().endsWith("sushi")) {
+                    newDirectoryName = newDirectoryName + File.separator;
+                } else {
+                    newDirectoryName = newDirectoryName + File.separator + oldFile.getName();
+                }
+                newFile = new File(newDirectoryName);
+                newFile.mkdir();
+                File[] oldFiles = oldFile.listFiles();
+                if (null != oldFiles && oldFiles.length != 0) {
+                    for (File file : oldFiles) {
+                        if (null == file || !file.exists() || file.length() == 0 || !file.canRead())
+                            continue;
+                        beganMigrateOldFiles(newDirectoryName, file);
+                    }
+                }
             } else {
-                newDirectoryName = newDirectoryName + File.separator + oldFile.getName();
-            }
-            newFile = new File(newDirectoryName);
-            newFile.mkdir();
-            if (newFile.exists())
-                return;
-            File[] oldFiles = oldFile.listFiles();
-            if (null == oldFiles || oldFiles.length == 0)
-                return;
-            for (File file : oldFiles) {
-                if (null == file || !file.exists() || file.length() == 0 || !file.canRead())
-                    continue;
-                beganMigrateOldFiles(newDirectoryName, file);
-            }
-        } else {
-            try {
-                fileInputStream = new FileInputStream(oldFile);
-
-                String newFileName = newDirectoryName + File.separator + oldFile.getName();
-                newFile = new File(newFileName);
-                if (newFile.exists())
-                    return;
-                fileOutputStream = new FileOutputStream(newFile);
-
-                int len;
-                while ((len = fileInputStream.read(buffer)) != -1) {
-                    fileOutputStream.write(buffer, 0, len);
-                }
-                fileOutputStream.flush();
-            } catch (Exception e) {
-                if (e.toString().contains("ENOSPC")) {
-                    //TODO
-                }
-            } finally {
                 try {
-                    if (null != fileOutputStream)
-                        fileOutputStream.close();
-                    if (null != fileInputStream)
-                        fileInputStream.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
+                    fileInputStream = new FileInputStream(oldFile);
+
+                    String newFileName = newDirectoryName + File.separator + oldFile.getName();
+                    newFile = new File(newFileName);
+                    if (!newFile.exists()) {
+                        fileOutputStream = new FileOutputStream(newFile);
+
+                        int len;
+                        while ((len = fileInputStream.read(buffer)) != -1) {
+                            fileOutputStream.write(buffer, 0, len);
+                        }
+                        fileOutputStream.flush();
+                    }
+                } catch (Exception e) {
+                    if (newFile != null && newFile.exists())
+                        newFile.delete();
+                    if (e.toString().contains("ENOSPC")) {
+
+                    }
+                } finally {
+                    try {
+                        if (null != fileOutputStream)
+                            fileOutputStream.close();
+                        if (null != fileInputStream)
+                            fileInputStream.close();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
         }

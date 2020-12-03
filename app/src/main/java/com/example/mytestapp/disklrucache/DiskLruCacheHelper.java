@@ -6,6 +6,7 @@ import android.text.TextUtils;
 
 import com.example.mytestapp.nfc.utils.LogUtil;
 import com.example.mytestapp.utils.CommonUtils;
+import com.example.mytestapp.utils.MyFileUtil;
 import com.jakewharton.disklrucache.DiskLruCache;
 
 import java.io.File;
@@ -20,7 +21,7 @@ public class DiskLruCacheHelper {
     }
 
     private File getDiskCacheDir(Context context, String uniqueName) {
-        return CommonUtils.getDiskCacheDir(context, uniqueName);
+        return MyFileUtil.getDiskCacheDir(context, uniqueName);
     }
 
     private int configDiskCacheMaxSize() {
