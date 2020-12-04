@@ -20,7 +20,7 @@ import java.util.List;
 
 public class MyFileUtil {
 
-    public static String getInnerDirectoryPath() {
+    public static String selectAppSpecificDirectory() {
         String filePath;
         if (Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState())
                 || !Environment.isExternalStorageRemovable()) {
@@ -106,7 +106,7 @@ public class MyFileUtil {
     }
 
     public static List<String> getCSVFileNameList() {
-        String path = getInnerDirectoryPath() + "/sushi/backup/";
+        String path = selectAppSpecificDirectory() + "/sushi/backup/";
         File file = new File(path);
         List<String> result = new ArrayList<String>();
         if (!file.isDirectory()) {
@@ -130,7 +130,7 @@ public class MyFileUtil {
     private void beganMigrateOldFiles(String newDirectoryName, File oldFile) {
         if (null != oldFile && oldFile.exists()) {
             if (TextUtils.isEmpty(newDirectoryName))
-                newDirectoryName = getInnerDirectoryPath();
+                newDirectoryName = selectAppSpecificDirectory();
 
             FileInputStream fileInputStream = null;
             FileOutputStream fileOutputStream = null;

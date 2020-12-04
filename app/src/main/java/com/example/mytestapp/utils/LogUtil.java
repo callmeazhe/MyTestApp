@@ -1,6 +1,5 @@
-package com.example.mytestapp.nfc.utils;
+package com.example.mytestapp.utils;
 
-import android.os.Environment;
 import android.util.Log;
 
 import java.io.BufferedWriter;
@@ -10,16 +9,16 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.Writer;
 
+import static com.example.mytestapp.nfc.utils.LogUtil.KEY_TAG;
+
 /**
  * Record debug logs and needRetryToGetPV logs that include runtime exceptions
- * Created by 30035027 on 8/14/2017.
  */
 
 public class LogUtil {
 
-    public static boolean IS_SAVE_LOG = false;
-    public static boolean IS_OUT_CONSOLE_LOG = true;
-    public static String KEY_TAG = "TAG_LOG";
+    public static final boolean IS_SAVE_LOG = false;
+    public static final boolean IS_OUT_CONSOLE_LOG = false;
 
     public static void saveExceptionFile(Throwable throwable) {
         StringBuffer stringBuffer = new StringBuffer();
@@ -41,35 +40,33 @@ public class LogUtil {
         if (!IS_SAVE_LOG)
             return;
         try {
-            if (Environment.getExternalStorageState().equals(Environment.MEDIA_MOUNTED)) {
-                String path = Environment.getExternalStorageDirectory().getPath() + "/sushi/";
-                String logFileAbsPath = path + "log.txt";
-                String oldLogFileAbsPath = path + "log.old";
+            String path = MyFileUtil.selectAppSpecificDirectory();
+            String logFileAbsPath = path + "log.txt";
+            String oldLogFileAbsPath = path + "log.old";
 
-                File dir = new File(path);
-                if (!dir.exists()) {
-                    dir.mkdirs();
-                }
-                File logFile = new File(logFileAbsPath);
-                if ((logFile.length() / 1024 / 1024) >= 5) {
-                    File logOldFile = new File(oldLogFileAbsPath);
-                    if (logOldFile.exists()) {
-                        logOldFile.delete();
-                    }
-                    logFile.renameTo(new File(oldLogFileAbsPath));
-                }
-                if (!logFile.exists()) {
-                    logFile.createNewFile();
-                }
-                FileWriter fw = new FileWriter(logFileAbsPath, true);
-                BufferedWriter bw = new BufferedWriter(fw);
-                bw.write(log);
-                bw.newLine();
-                bw.flush();
-                bw.close();
+            File dir = new File(path);
+            if (!dir.exists()) {
+                dir.mkdirs();
             }
+            File logFile = new File(logFileAbsPath);
+            if ((logFile.length() / 1024 / 1024) >= 5) {
+                File logOldFile = new File(oldLogFileAbsPath);
+                if (logOldFile.exists()) {
+                    logOldFile.delete();
+                }
+                logFile.renameTo(new File(oldLogFileAbsPath));
+            }
+            if (!logFile.exists()) {
+                logFile.createNewFile();
+            }
+            FileWriter fw = new FileWriter(logFileAbsPath, true);
+            BufferedWriter bw = new BufferedWriter(fw);
+            bw.write(log);
+            bw.newLine();
+            bw.flush();
+            bw.close();
         } catch (Exception e) {
-            LogUtil.outLog("an error occurred while writing file..." + e.toString());
+            outLog("an error occurred while writing file..." + e.toString());
         }
     }
 

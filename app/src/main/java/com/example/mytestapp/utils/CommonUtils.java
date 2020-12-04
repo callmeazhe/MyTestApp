@@ -283,7 +283,7 @@ public class CommonUtils {
             String fileName = "error-" + time + "-" + System.currentTimeMillis() + ".txt";
             if (Environment.getExternalStorageState().equals(
                     Environment.MEDIA_MOUNTED)) {
-                String path = MyFileUtil.getInnerDirectoryPath();
+                String path = MyFileUtil.selectAppSpecificDirectory();
                 File dir = new File(path);
                 if (!dir.exists()) {
                     dir.mkdirs();
