@@ -85,7 +85,7 @@ public class NtagI2CUtils {
             }
             // watch RF_READY
             int resultCode = NtagSessionUtils.waitCpuPrepareSRAMDataWithRetry(nfca);
-            if (resultCode == Constants.NFC_ERROR_CODE) {
+            if (resultCode == Constants.ERROR_CODE) {
                 retryCount++;
                 writeWithRetry(nfca, list, listener, index, retryCount);
             } else {
@@ -221,7 +221,7 @@ public class NtagI2CUtils {
                     (byte) Constants.SRAM_END);
             LogUtil.outLog("waitCpuPrepareSRAMData");
             int resultCode = NtagSessionUtils.waitCpuPrepareSRAMDataWithRetry(nfca);
-            if (resultCode == Constants.NFC_ERROR_CODE) {
+            if (resultCode == Constants.ERROR_CODE) {
                 retryCount++;
                 readWithDoTry(nfca, nfcFrames, modbuslist, index, retryCount, resParameter, listener);
             } else {
@@ -250,7 +250,7 @@ public class NtagI2CUtils {
                     }
                     for (int ii = 1; ii < nfcFrameNumber; ii++) {
                         resultCode = NtagSessionUtils.waitCpuPrepareSRAMDataWithRetry(nfca);
-                        if (resultCode == Constants.NFC_ERROR_CODE) {
+                        if (resultCode == Constants.ERROR_CODE) {
                             retryCount++;
                             readWithDoTry(nfca, nfcFrames, modbuslist, index, retryCount, resParameter, listener);
                         } else {

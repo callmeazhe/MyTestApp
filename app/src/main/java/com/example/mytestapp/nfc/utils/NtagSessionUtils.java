@@ -217,10 +217,10 @@ public class NtagSessionUtils {
             }
             long currentTime = System.currentTimeMillis();
             if ((currentTime - startTime) >= Constants.WAIT_TOTAL_TIME) {
-                return Constants.NFC_ERROR_CODE;
+                return Constants.ERROR_CODE;
             }
         }
-        return Constants.NFC_ERROR_CODE;
+        return Constants.ERROR_CODE;
     }
 
     /**
