@@ -25,8 +25,25 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            zipAlignEnabled true
+            applicationVariants.all { variant ->
+                variant.outputs.all {
+                    outputFileName = "trunk_${variant.productFlavors[0].name}" +
+                            "_${defaultConfig.versionCode}" +
+                            "_${defaultConfig.versionName}" +
+                            "_${releaseTime()}.apk"
+                }
+            }
         }
     }
+    flavorDimensions "sushisensor"
+    productFlavors {
+        sushisensor {
+            dimension "sushisensor"
+        }
+    }
+
     externalNativeBuild {
         cmake {
             path "src/main/cpp/CMakeLists.txt"
@@ -38,7 +55,9 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 }
-
+def releaseTime() {
+    return new Date().format("yyyyMMdd", TimeZone.getTimeZone("UTC"))
+}
 dependencies {
 
     implementation 'androidx.appcompat:appcompat:1.2.0'
