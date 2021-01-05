@@ -72,7 +72,7 @@ dependencies {
     implementation 'com.github.bumptech.glide:glide:4.11.0'
     implementation files('libs\\javacsv-2.0.jar')
     implementation files('libs\\xstream-1.4.12.jar')
-    implementation files('libs\\xstream-1.4.12.jar')
+    implementation files('libs\\json-lib-2.4-jdk15.jar')
     annotationProcessor 'com.github.bumptech.glide:compiler:4.11.0'
     //导入Disk LRU Cache依赖
     implementation 'com.jakewharton:disklrucache:2.0.2'
