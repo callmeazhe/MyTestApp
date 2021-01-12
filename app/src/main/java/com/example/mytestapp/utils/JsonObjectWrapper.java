@@ -19,7 +19,7 @@ public class JsonObjectWrapper {
     }
 
     public String toString() {
-        if(properties == null) {
+        if (properties == null) {
             return JSONNull.getInstance().toString();
         }
 
@@ -27,7 +27,7 @@ public class JsonObjectWrapper {
             Iterator keys = this.keys();
             StringBuffer sb = new StringBuffer("{");
 
-            while(keys.hasNext()) {
+            while (keys.hasNext()) {
                 if (sb.length() > 1) {
                     sb.append(',');
                 }
@@ -54,7 +54,7 @@ public class JsonObjectWrapper {
     }
 
     private Map getJsonObjectPropertyMap() {
-        if(this.mJsonObject == null) {
+        if (this.mJsonObject == null) {
             return null;
         }
 
@@ -63,7 +63,7 @@ public class JsonObjectWrapper {
             Field mapField = JSONObject.class.getDeclaredField("properties");
             mapField.setAccessible(true);
             Object mapObject = mapField.get(this.mJsonObject);
-            if(mapObject != null && mapObject instanceof Map) {
+            if (mapObject != null && mapObject instanceof Map) {
                 property = (Map) mapObject;
             }
         } catch (Exception e) {
@@ -79,9 +79,8 @@ public class JsonObjectWrapper {
             } else if (value instanceof JSONString) {
                 String o;
                 try {
-                    o = ((JSONString)value).toJSONString();
+                    o = ((JSONString) value).toJSONString();
                 } catch (Exception var3) {
-                    var3.printStackTrace();
                     return null;
                 }
 
@@ -91,17 +90,21 @@ public class JsonObjectWrapper {
                     return null;
                 }
             } else if (value instanceof Number) {
-                return numberToString((Number)value);
-            } else if (value instanceof JSONObject){
+                return numberToString((Number) value);
+            } else if (value instanceof JSONObject) {
                 return new JsonObjectWrapper((JSONObject) value).toString();
-            }else if (value instanceof JSONArray){
-                StringBuffer buffer = new StringBuffer();
-                for (int i = 0;i < ((JSONArray) value).size();i++){
+            } else if (value instanceof JSONArray) {
+                StringBuffer buffer = new StringBuffer("[");
+                for (int i = 0; i < ((JSONArray) value).size(); i++) {
+                    if (buffer.length() > 1) {
+                        buffer.append(',');
+                    }
                     buffer.append(new JsonObjectWrapper((JSONObject) value).toString());
                 }
+                buffer.append(']');
                 return buffer.toString();
-            }else {
-                return !(value instanceof Boolean)  ? JSONUtils.quote(value.toString()) : value.toString();
+            } else {
+                return !(value instanceof Boolean) ? JSONUtils.quote(value.toString()) : value.toString();
             }
         } else {
             return "null";
