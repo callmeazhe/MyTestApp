@@ -179,4 +179,7 @@ public class AESUtils {
         return decryptFile;
     }
 
+    public static byte[] getUlNtagKeyCardSecretKey() {
+        return null;
+    }
 }
