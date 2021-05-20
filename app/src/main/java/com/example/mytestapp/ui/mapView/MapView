@@ -1,0 +1,948 @@
+/*
+ * Copyright (C) 2017 OrionStar Technology Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.PointF;
+import android.graphics.Rect;
+import android.graphics.RectF;
+import android.graphics.drawable.Drawable;
+import android.util.AttributeSet;
+import android.view.MotionEvent;
+import android.view.View;
+
+import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
+
+import java.util.ArrayList;
+import java.util.List;
+
+
+public class MapView extends View {
+    private String TAG = getClass().getSimpleName();
+    private static float sArrowSize = 20;
+
+    private Bitmap mBitmap;
+    private Matrix matrix;
+    private float scaleHistory = 1.0f;
+    private float scaleMin = 0.5f;
+    private Paint mPaint;
+    private EditPath mEditPath;
+    private Pose2d mOrigin;
+    private Pose2d mCollector;
+    private MapMode mMode = MapMode.PREVIEW;
+    private List<EditPath> mPathList = new ArrayList<>();
+    private List<EditPath> eraserList = new ArrayList<>();
+    private int eraserCur = -1;
+    private List<EditPath> lineList = new ArrayList<>();
+    private int lineCur = -1;
+
+    private float mEditWidth = 4;
+    private int mEditColor = MapDef.MAPCOLOR.UNDETECT;
+    private OnCollectListener mOnCollectListener;
+    private OnPlaceClickListener mOnPlaceClickListener;
+    private OnEditHappenListener mOnEditHappenListener;
+    private List<Pose2d> mTargets = new ArrayList<>(); // preview when select patrol plan.
+
+    private int width = 0;
+    private int height = 0;
+
+    private boolean estimateMove = false;
+
+    public boolean hasEraser() {
+        return eraserList.size() != 0;
+    }
+
+    public boolean eraserCanBack() {
+        if (hasEraser()) {
+            return eraserCur != -1;
+        }
+        return false;
+    }
+
+    public boolean eraserCanForward() {
+        if (hasEraser()) {
+            return eraserCur != eraserList.size() - 1;
+        }
+
+        return false;
+    }
+
+    public void eraserBack() {
+        if (eraserCanBack()) {
+            eraserCur--;
+            if (mOnEditHappenListener != null) {
+                mOnEditHappenListener.onEditHappend();
+            }
+            invalidate();
+        }
+    }
+
+    public void eraserForward() {
+        if (eraserCanForward()) {
+            eraserCur++;
+            if (mOnEditHappenListener != null) {
+                mOnEditHappenListener.onEditHappend();
+            }
+            invalidate();
+        }
+    }
+
+    public void enterEraser() {
+        //设置颜色即可
+        eraserCur = -1;
+        if (eraserList != null) {
+            eraserList.clear();
+            invalidate();
+        }
+    }
+
+    public void saveEraser() {
+        Logger.d("MapView saveEraser");
+        for (int i = 0; i <= eraserCur; i++) {//仅保存eraseCur指向的位置
+            mPathList.add(eraserList.get(i));
+        }
+        eraserCur = -1;
+        eraserList.clear();
+        invalidate();
+    }
+
+    public void cancelEraser() {
+        eraserCur = -1;
+        if (eraserList != null && eraserList.size() > 0) {
+            eraserList.clear();
+            invalidate();
+        }
+    }
+
+    public boolean hasLines() {
+        return lineList.size() != 0;
+    }
+
+    public boolean linesCanBack() {
+        if (hasLines()) {
+            return lineCur != -1;
+        }
+        return false;
+    }
+
+    public boolean linesCanForward() {
+        if (hasLines()) {
+            return lineCur != lineList.size() - 1;
+        }
+
+        return false;
+    }
+
+    public void lineBack() {
+        if (linesCanBack()) {
+            lineCur--;
+            if (mOnEditHappenListener != null) {
+                mOnEditHappenListener.onEditHappend();
+            }
+            invalidate();
+        }
+    }
+
+    public void lineForward() {
+        if (linesCanForward()) {
+            lineCur++;
+            if (mOnEditHappenListener != null) {
+                mOnEditHappenListener.onEditHappend();
+            }
+            invalidate();
+        }
+    }
+
+    public void enterLines() {
+        //设置颜色即可
+        lineCur = -1;
+        lineList.clear();
+        invalidate();
+    }
+
+    public void saveLines() {
+        Logger.d("saveLines");
+        for (int i = 0; i <= lineCur; i++) {//仅保存lineCur指向的位置
+            mPathList.add(lineList.get(i));
+        }
+        lineCur = -1;
+        lineList.clear();
+        invalidate();
+    }
+
+    public void cancelLines() {
+        lineCur = -1;
+        if (lineList != null && lineList.size() > 0) {
+            lineList.clear();
+            invalidate();
+        }
+    }
+
+    public MapView(Context context) {
+        this(context, null);
+    }
+
+    public MapView(Context context, @Nullable AttributeSet attrs) {
+        this(context, attrs, 0);
+    }
+
+    public MapView(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+
+    public boolean hasEditPath() {
+        return mPathList.size() != 0;
+    }
+
+    public void setBitmap(Bitmap bitmap) {
+        mBitmap = bitmap;
+        if (mBitmap != null) {
+            initOnce = true;
+            scaleMin = Math.min(100f / mBitmap.getWidth(), 100f / mBitmap.getHeight());
+            scaleHistory = 1.0f;
+            rotateHistory = 0;
+        }
+        invalidate();
+    }
+
+    public void setOrigin(Pose2d origin) {
+        mOrigin = origin;
+        invalidate();
+    }
+
+    public void setTargets(List<Pose2d> targets) {
+        mTargets = targets;
+        invalidate();
+    }
+
+    public void setMode(MapMode mode) {
+        mMode = mode;
+    }
+
+    public MapMode getMode() {
+        return mMode;
+    }
+
+    public List<PlaceBean> getPlaceList() {
+        return placeBeans;
+    }
+
+    public enum MapMode {
+        PREVIEW,
+        EDIT,// eraser and line
+        COLLECT,//estimate mode
+        POINT
+    }
+
+    public interface OnCollectListener {
+        void onCollect(Pose2d pose2d);
+    }
+
+    public interface OnPlaceClickListener {
+        void onPlaceClick(PlaceBean placeBean);
+    }
+
+    public interface OnEditHappenListener {
+        void onEditHappend();
+    }
+
+    public void registOnEditHappendListener(OnEditHappenListener listener) {
+        mOnEditHappenListener = listener;
+    }
+
+    public void registerPlaceClickListener(OnPlaceClickListener listener) {
+        mOnPlaceClickListener = listener;
+    }
+
+    public void unRegisterOnplaceClickListener() {
+        mOnPlaceClickListener = null;
+    }
+
+    public void setOnCollectListener(OnCollectListener onCollectListener) {
+        mOnCollectListener = onCollectListener;
+    }
+
+    public void setEditColor(int color) {
+        mEditColor = color;
+    }
+
+    public void editBack() {
+        if (mPathList.size() > 0) {
+            mPathList.remove(mPathList.size() - 1);
+            invalidate();
+        }
+    }
+
+    public void setEditWidth(float width) {
+        mEditWidth = width;
+    }
+
+    public Bitmap getEditedBitmap() {
+        if (mBitmap != null) {
+            Canvas canvas = new Canvas(mBitmap);
+            for (EditPath editPath : mPathList) {
+                canvas.drawPath(editPath.path, editPath.paint);
+            }
+            mPathList.clear();
+        }
+        return mBitmap;
+    }
+
+    private void init() {
+        mPaint = new Paint();
+        matrix = new Matrix();
+//        matrix.setTranslate(0, 0);
+
+    }
+
+    private PointF lastPoint = new PointF();
+    private volatile boolean isPinch = false;
+    private float lastSpace = 0;
+    private float lastRotate = 0;
+    private float rotateHistory = 0;
+
+    private PointF invertPoint(Matrix matrix, float x, float y) {
+        float[] src = new float[]{x, y};
+        float[] dst = new float[2];
+        Matrix inv = new Matrix();
+        matrix.invert(inv);
+        inv.mapPoints(dst, src);
+        return new PointF(dst[0], dst[1]);
+    }
+
+    private boolean editHappend = false;
+    private boolean twoPointer = false;
+    private boolean isPOINTER_UP;
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (mMode == MapMode.COLLECT) {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    PointF pointDown = invertPoint(matrix, event.getX(), event.getY());
+                    mCollector = new Pose2d(pointDown.x, pointDown.y, 0);
+                    estimateMove = false;
+                    break;
+                case MotionEvent.ACTION_UP:
+                    if (mOnCollectListener != null && mCollector != null && estimateMove) {
+                        estimateMove = false;
+                        mOnCollectListener.onCollect(mCollector);
+                    }
+                    mCollector = null;
+                    invalidate();
+                    break;
+
+                case MotionEvent.ACTION_MOVE:
+                    PointF pointMove = invertPoint(matrix, event.getX(), event.getY());
+                    if (mCollector != null) {
+                        estimateMove = true;
+                        mCollector.t = 0 - Math.atan2((pointMove.y - mCollector.y),
+                                (pointMove.x - mCollector.x));
+
+                        invalidate();
+                    }
+                    break;
+                default:
+                    break;
+            }
+        } else if (mMode == MapMode.EDIT) {//编辑模式（画线 或者 橡皮擦）
+            switch (event.getAction() & MotionEvent.ACTION_MASK) {
+                case MotionEvent.ACTION_DOWN:
+                    mEditPath = new EditPath(mEditColor, mEditWidth);
+                    PointF pointDown = invertPoint(matrix, event.getX(), event.getY());
+                    mEditPath.path.moveTo(pointDown.x, pointDown.y);
+
+                    lastPoint.set(event.getX(), event.getY());
+                    editHappend = false;
+                    twoPointer = false;
+                    break;
+                case MotionEvent.ACTION_UP:
+                    if (/*!isPinch &&*/ editHappend) {
+                        if (curEraser()) {
+                            if (eraserCur == eraserList.size() - 1) {//没有过撤销
+                                eraserList.add(mEditPath);
+                                eraserCur++;
+                            } else {//有撤销和前进，采取插入策略
+                                eraserList.add(eraserCur + 1, mEditPath);
+                                eraserCur++;
+                            }
+                        } else if (curLines()) {
+                            mEditPath.path.reset();
+                            PointF pointF = invertPoint(matrix, lastPoint.x, lastPoint.y);
+                            mEditPath.path.moveTo(pointF.x, pointF.y);
+                            PointF pointMove = invertPoint(matrix, event.getX(), event.getY());
+                            mEditPath.path.lineTo(pointMove.x, pointMove.y);
+                            if (lineCur == lineList.size() - 1) {//没有过撤销
+                                lineList.add(mEditPath);
+                                lineCur++;
+                            } else {//有撤销和前进，采取插入策略
+                                lineList.add(lineCur + 1, mEditPath);
+                                lineCur++;
+                            }
+                        }
+//                        mPathList.add(mEditPath);
+                        if (mOnEditHappenListener != null) {
+                            Logger.d("MapView editHappend");
+                            mOnEditHappenListener.onEditHappend();
+                        }
+                        editHappend = false;
+                    }
+                    mEditPath = null;
+                    twoPointer = false;
+                    invalidate();
+                    break;
+
+                case MotionEvent.ACTION_MOVE:
+                    //画线
+                    if (!isPinch && !twoPointer) {
+                        if (mEditPath != null) {
+                            PointF pointMove = invertPoint(matrix, event.getX(), event.getY());
+                            mEditPath.path.lineTo(pointMove.x, pointMove.y);
+                            editHappend = true;
+                        }
+                    }
+                    //编辑时双指缩放
+                    PointF point = new PointF(event.getX(), event.getY());
+                    if (isPinch && mBitmap != null) {
+                        float space = pinchSpace(event);
+                        float rotate = pinchRotation(event);
+                        PointF center = pinchCenter(event);
+
+                        float scale = space / lastSpace;
+                        if (scale * scaleHistory < scaleMin) {//保证历史累计缩放不能小于1.0f
+                            /*scale = 1.0f;
+                            scaleHistory = scaleMin;*/
+                        } else {
+                            scaleHistory = scale * scaleHistory;
+                            matrix.postScale(scale, scale, center.x, center.y);
+                        }
+                        matrix.postRotate(rotate - lastRotate, center.x, center.y);
+
+                        rotateHistory = rotateHistory + (rotate - lastRotate);
+                        lastSpace = space;
+                        lastRotate = rotate;
+                        point = center;
+
+                        float dx = point.x - lastPoint.x;
+                        float dy = point.y - lastPoint.y;
+                        lastPoint = point;
+                        matrix.postTranslate(dx, dy);
+                    }
+
+
+                    invalidate();
+                    break;
+
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    isPinch = true;
+                    twoPointer = true;
+                    lastSpace = pinchSpace(event);
+                    lastRotate = pinchRotation(event);
+                    lastPoint = pinchCenter(event);
+                    break;
+                case MotionEvent.ACTION_POINTER_UP:
+                    isPinch = false;
+                    break;
+                default:
+                    break;
+            }
+        } else if (mMode == MapMode.PREVIEW) {
+            switch (event.getAction() & MotionEvent.ACTION_MASK) {
+                case MotionEvent.ACTION_DOWN:
+                    lastPoint.set(event.getX(), event.getY());
+                    isPOINTER_UP = false;
+                    break;
+                case MotionEvent.ACTION_UP:
+                    performClick();
+                    break;
+
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    isPinch = true;
+                    lastSpace = pinchSpace(event);
+                    lastRotate = pinchRotation(event);
+                    lastPoint = pinchCenter(event);
+                    break;
+                case MotionEvent.ACTION_POINTER_UP:
+                    isPinch = false;
+                    isPOINTER_UP = true;
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    PointF point = new PointF(event.getX(), event.getY());
+                    if (mBitmap != null) {
+                        if (isPinch) {
+                            float space = pinchSpace(event);
+                            float rotate = pinchRotation(event);
+                            PointF center = pinchCenter(event);
+
+                            float scale = space / lastSpace;
+                            if (scale * scaleHistory < scaleMin) {//保证历史累计缩放不能小于1.0f
+                            /*scale = 1.0f;
+                            scaleHistory = scaleMin;*/
+                            } else {
+                                scaleHistory = scale * scaleHistory;
+                                matrix.postScale(scale, scale, center.x, center.y);
+                            }
+                            matrix.postRotate(rotate - lastRotate, center.x, center.y);
+
+                            rotateHistory = rotateHistory + (rotate - lastRotate);
+                            lastSpace = space;
+                            lastRotate = rotate;
+                            invalidate();
+                        } else {
+                            float dx = point.x - lastPoint.x;
+                            float dy = point.y - lastPoint.y;
+                            lastPoint = point;
+                            if (!isPOINTER_UP) {
+                                matrix.postTranslate(dx, dy);
+                                invalidate();
+                            }
+                            isPOINTER_UP = false;
+                        }
+                    }
+                default:
+                    break;
+            }
+        } else if (mMode == MapMode.POINT) {
+            switch (event.getAction() & MotionEvent.ACTION_MASK) {
+                case MotionEvent.ACTION_DOWN:
+                    lastPoint.set(event.getX(), event.getY());
+                    break;
+                case MotionEvent.ACTION_UP:
+                    if (placeBeans != null) {
+                        for (int i = 0; i < placeBeans.size(); i++) {
+                            PlaceBean bean = placeBeans.get(i);
+                            Rect rect = getRect(bean.getPose(), false);
+                            Matrix tmpMatrix = new Matrix();
+                            tmpMatrix.postRotate(-rotateHistory, (float) bean.getPose().x, (float) bean.getPose().y);
+                            Matrix myMat = new Matrix();
+                            myMat.setConcat(matrix, tmpMatrix);
+                            RectF rectf = new RectF(rect);
+                            myMat.mapRect(rectf);
+                            if (isInRectf(rectf, event)) {
+//                                Toast.makeText(getContext(), "选中" + bean.getName(), Toast.LENGTH_SHORT).show();
+                                bigIconIndex = i;
+                                if (mOnPlaceClickListener != null) {
+                                    mOnPlaceClickListener.onPlaceClick(bean);
+                                }
+                                invalidate();
+                            }
+
+                        }
+                    }
+                    break;
+
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    isPinch = true;
+                    lastSpace = pinchSpace(event);
+                    lastRotate = pinchRotation(event);
+                    lastPoint = pinchCenter(event);
+                    break;
+                case MotionEvent.ACTION_POINTER_UP:
+                    isPinch = false;
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    PointF point = new PointF(event.getX(), event.getY());
+                    if (isPinch && mBitmap != null) {
+                        float space = pinchSpace(event);
+                        float rotate = pinchRotation(event);
+                        PointF center = pinchCenter(event);
+
+                        float scale = space / lastSpace;
+                        if (scale * scaleHistory < scaleMin) {//保证历史累计缩放不能小于1.0f
+                            /*scale = 1.0f;
+                            scaleHistory = scaleMin;*/
+                        } else {
+                            scaleHistory = scale * scaleHistory;
+                            matrix.postScale(scale, scale, center.x, center.y);
+                        }
+                        matrix.postRotate(rotate - lastRotate, center.x, center.y);
+
+                        rotateHistory = rotateHistory + (rotate - lastRotate);
+                        lastSpace = space;
+                        lastRotate = rotate;
+                        point = center;
+                    }
+                    float dx = point.x - lastPoint.x;
+                    float dy = point.y - lastPoint.y;
+                    lastPoint = point;
+                    matrix.postTranslate(dx, dy);
+                    invalidate();
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        return true;
+    }
+
+    public boolean curEraser() {
+        return mEditColor == MapDef.MAPCOLOR.PASS;
+    }
+
+    public boolean curLines() {
+        return mEditColor == MapDef.MAPCOLOR.BLOCK;
+    }
+
+    private boolean isInRectf(RectF rectf, MotionEvent event) {
+        float x = event.getX();
+        float y = event.getY();
+        float left = rectf.left;
+        float top = rectf.top;
+        float right = rectf.right;
+        float bottom = rectf.bottom;
+        if (x >= Math.min(left, right) && x <= Math.max(left, right)
+                && y >= Math.min(top, bottom) && y <= Math.max(top, bottom)) {
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        width = measureWidth(widthMeasureSpec);
+        height = measureHeight(heightMeasureSpec);
+//        left = getPaddingLeft();
+//        top = getPaddingTop();
+        setMeasuredDimension(width, height);
+    }
+
+    boolean initOnce = true;
+
+    private void initMatrix() {
+        if (mBitmap != null && initOnce) {
+            Logger.d("MapView width/2 - mBitmap.getWidth()/2 = " + (width / 2 - mBitmap.getWidth() / 2)
+                    + ", height/2 - mBitmap.getHeight()/2 = " + (height / 2 - mBitmap.getHeight() / 2));
+            initOnce = false;
+            matrix.setTranslate(width / 2 - mBitmap.getWidth() / 2, height / 2 - mBitmap.getHeight() / 2);
+            float scale = Math.min(1100 * 1f / mBitmap.getWidth(), 1100 * 1f / mBitmap.getHeight());
+            matrix.postScale(scale, scale, width / (float) 2, height / (float) 2);
+            scaleHistory = scale;
+        }
+    }
+
+    private class EditPath {
+        Path path;
+        Paint paint;
+
+        EditPath(int color, float width) {
+            this.path = new Path();
+            this.paint = new Paint();
+            this.paint.setAntiAlias(true);
+//            this.paint.setMaskFilter(new BlurMaskFilter(2, BlurMaskFilter.Blur.INNER));
+            this.paint.setColor(color);
+            this.paint.setStyle(Paint.Style.STROKE);
+            this.paint.setStrokeWidth(width);
+        }
+    }
+
+    private int measureWidth(int measureSpec) {
+        int result = getPaddingLeft() + getPaddingRight();
+        if (mBitmap != null) {
+            result += mBitmap.getWidth();
+        }
+        int specMode = MeasureSpec.getMode(measureSpec);
+        int specSize = MeasureSpec.getSize(measureSpec);
+        switch (specMode) {
+            case MeasureSpec.UNSPECIFIED:
+                result = specSize;
+                break;
+            case MeasureSpec.AT_MOST:
+                result = Math.min(result, specSize);
+                break;
+            case MeasureSpec.EXACTLY:
+                result = specSize;
+                break;
+            default:
+                break;
+        }
+        return result;
+    }
+
+    private int measureHeight(int measureSpec) {
+        int result = getPaddingTop() + getPaddingBottom();
+        if (mBitmap != null) {
+            result += mBitmap.getHeight();
+        }
+        int specMode = MeasureSpec.getMode(measureSpec);
+        int specSize = MeasureSpec.getSize(measureSpec);
+        switch (specMode) {
+            case MeasureSpec.UNSPECIFIED:
+                result = specSize;
+                break;
+            case MeasureSpec.AT_MOST:
+                result = Math.min(result, specSize);
+                break;
+            case MeasureSpec.EXACTLY:
+                result = specSize;
+                break;
+            default:
+                break;
+        }
+        return result;
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        if (mBitmap == null) {
+            return;
+        }
+        initMatrix();
+        canvas.concat(matrix);
+        canvas.drawBitmap(mBitmap, 0, 0, mPaint);
+
+        for (EditPath editPath : mPathList) {//绘制历史的path
+            canvas.drawPath(editPath.path, editPath.paint);
+        }
+
+        if (curEraser()) {//绘制本次的划线和橡皮
+            if (eraserList.size() != 0) {
+                for (int i = 0; i <= eraserCur; i++) {
+                    canvas.drawPath(eraserList.get(i).path, eraserList.get(i).paint);
+                }
+            }
+        } else if (curLines()) {
+            if (lineList.size() != 0) {
+                for (int i = 0; i <= lineCur; i++) {
+                    canvas.drawPath(lineList.get(i).path, lineList.get(i).paint);
+                }
+            }
+        }
+
+        if (mEditPath != null) {
+            canvas.drawPath(mEditPath.path, mEditPath.paint);
+        }
+
+        drawCollector(canvas);
+        drawTargets(canvas);
+        drawPlaceList(placeBeans, canvas);
+        drawOrigin(canvas);
+    }
+
+    private void drawOrigin(Canvas canvas) {
+        if (mOrigin != null) {
+            drawArrow(canvas, (float) mOrigin.x, (float) mOrigin.y, 50,
+                    (float) mOrigin.t, Color.RED);
+        }
+    }
+
+    private void drawCollector(Canvas canvas) {
+        if (mCollector != null) {
+            drawArrow(canvas, (float) mCollector.x, (float) mCollector.y, 100,
+                    (float) mCollector.t, Color.GREEN);
+        }
+    }
+
+    private void drawTargets(Canvas canvas) {
+        if (mTargets != null) {
+            for (int i = 0; i < mTargets.size(); i++) {
+                Pose2d target = mTargets.get(i);
+                drawCircleText(canvas, Color.RED, (float) target.x, (float) target.y, "" + i);
+            }
+        }
+    }
+
+    private int bigIconIndex = -1;//一次只有一个bigIconIndex
+    private List<PlaceBean> placeBeans;
+
+    public void setPlaceBeans(List<PlaceBean> placeBeans) {
+        this.placeBeans = placeBeans;
+        invalidate();
+    }
+
+    public void resetBigIconIndex() {
+        bigIconIndex = -1;
+        invalidate();
+    }
+
+    private Drawable getIconByName(String name) {
+        return ContextCompat.getDrawable(getContext(), R.drawable.shape_circle_blue_bg);
+    }
+
+    private void drawPlaceList(List<PlaceBean> placeBeans, Canvas canvas) {
+        if (placeBeans != null) {
+            boolean hasBigIcon = false;
+            for (int i = 0; i < placeBeans.size(); i++) {
+//                if (i == bigIconIndex) {
+//                    hasBigIcon = true;
+//                    continue;
+//                }
+                drawPlace(canvas, placeBeans.get(i).getPose(), placeBeans.get(i).getName(),
+                        getIconByName(placeBeans.get(i).getName()), false);
+
+            }
+//            if (hasBigIcon) {
+//                drawPlace(canvas, placeBeans.get(bigIconIndex).getPose(), placeBeans.get(bigIconIndex).getName(),
+//                        getIconByName(placeBeans.get(bigIconIndex).getName()), true);
+//            }
+        }
+    }
+
+
+    private void drawPlace(Canvas canvas, Pose2d pose2d, String name, Drawable icon, boolean bigIcon) {
+        Matrix matrix = new Matrix();
+        matrix.postRotate(-rotateHistory, (float) pose2d.x, (float) pose2d.y);
+        canvas.save();
+        canvas.concat(matrix);
+        Rect rectIcon = getRect(pose2d, bigIcon);
+        //绘制icon
+        icon.setBounds(rectIcon);
+        icon.draw(canvas);
+        //绘制text
+//        if (name == null) {
+//            name = "";
+//        }
+//        int textSize = 32;
+//        int dTop = 8;
+//        Paint mPaint = new Paint();
+//        mPaint.setTextSize(textSize / scaleHistory);
+//        mPaint.setColor(Color.WHITE);
+//        mPaint.setTextAlign(Paint.Align.CENTER);
+//        //名称不显示
+//        canvas.drawText("", (float) pose2d.x, (rectIcon.top - dTop / scaleHistory), mPaint);
+//        canvas.drawText(name, (float) pose2d.x, (rectIcon.top - dTop/scaleHistory), mPaint);
+        canvas.restore();
+    }
+
+    private Rect getRect(Pose2d pose2d, boolean bigIcon) {
+        int size = bigIcon ? 40 : 20;
+
+        float x = (float) pose2d.x;
+        float y = (float) pose2d.y;
+        if (scaleHistory > size / 3) {
+            size = (int) scaleHistory * 4;
+        }
+        float width = size;
+        float height = size;
+        int left = (int) (x - (width / 2) / scaleHistory);
+        int top = (int) (y - (height / 2) / scaleHistory);
+        int right = (int) (x + (width / 2) / scaleHistory);
+        int bottom = (int) (y + (height / 2) / scaleHistory);
+        return new Rect(left, top, right, bottom);
+    }
+
+    //    private Rect getRect(Pose2d pose2d, boolean bigIcon) {
+//        float x = (float) pose2d.x;
+//        float y = (float) pose2d.y;
+//        float width = bigIcon ? 40 : 20;
+//        float heigth = bigIcon ? 40 : 20;
+//
+//        float ey = (float) (y - heigth/scaleHistory);
+//        return new Rect((int)(x - (width/(float)2)/scaleHistory), (int)(ey) ,
+//                (int) (x + (width/(float)2)/scaleHistory), (int)(y));
+//
+////        return  new Rect((int) (x - (width/2)/scaleHistory), (int)(y - (heigth)/scaleHistory) ,
+////                (int) (x + (width/2)/scaleHistory), (int)(y));
+//    }
+    private void drawCircleText(Canvas canvas, int color, float x, float y, String text) {
+        if (text == null) {
+            text = "";
+        }
+        Paint paint = new Paint();
+        paint.setAntiAlias(false);
+        paint.setColor(color);
+        paint.setStyle(Paint.Style.FILL);
+        canvas.drawCircle(x, y, 10, paint);
+
+        paint.setColor(Color.WHITE);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setTextSize(12);
+        canvas.drawText(text, x - 4 * text.length(), y + 4, paint);
+    }
+
+    private void drawArrow(Canvas canvas, float x, float y, float len, float angle, int color) {
+        canvas.save();
+        angle = 0 - angle;
+        Paint paint = new Paint();
+        paint.setAntiAlias(false);
+        paint.setColor(color);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setStrokeWidth(8);
+
+        Matrix tempMat = new Matrix();
+        tempMat.postRotate((float) (Math.toDegrees(angle) + 90), x, y);
+        canvas.concat(tempMat);
+        int width = 50;
+        int height = 50;
+//        float ex = (float) (x + Math.cos(angle) * width);
+//        float ey = (float) (y + Math.sin(angle) * height);
+//        float ex = x;
+//        float ey = (y - height / scaleHistory);
+        Drawable robotIcon = ContextCompat.getDrawable(getContext(), R.drawable.robot_b);
+        //这种计算会导致错位,保留此注释是因为对此写法有质疑，以便日后复核
+//        robotIcon.setBounds(new Rect((int) (x - (width / (float) 2) / scaleHistory), (int) (ey),
+//                (int) (x + (width / (float) 2) / scaleHistory), (int) (y)));
+        //这种计算会基本重合，因为和drawPlace中getRect方法计算一致
+        float widthHalf = width / 2;
+        float heightHalf = height / 2;
+        robotIcon.setBounds(new Rect(
+                (int) (x - widthHalf / scaleHistory),
+                (int) (y - heightHalf / scaleHistory),
+                (int) (x + widthHalf / scaleHistory),
+                (int) (y + heightHalf / scaleHistory)));
+
+        robotIcon.draw(canvas);
+        canvas.restore();
+    }
+
+
+    private float pinchSpace(MotionEvent event) {
+        float x = event.getX(0);
+        float y = event.getY(0);
+        try {
+            x = event.getX(0) - event.getX(1);
+            y = event.getY(0) - event.getY(1);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return (float) Math.sqrt(x * x + y * y);
+    }
+
+    private PointF pinchCenter(MotionEvent event) {
+        float x = event.getX(0);
+        float y = event.getY(0);
+        try {
+            x = event.getX(0) + event.getX(1);
+            y = event.getY(0) + event.getY(1);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return new PointF(x / 2, y / 2);
+    }
+
+    private float pinchRotation(MotionEvent event) {
+        double delta_x = event.getX(0);
+        double delta_y = event.getY(0);
+        try {
+            delta_x = (event.getX(0) - event.getX(1));
+            delta_y = (event.getY(0) - event.getY(1));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        double radians = Math.atan2(delta_y, delta_x);
+        return (float) Math.toDegrees(radians);
+    }
+}
